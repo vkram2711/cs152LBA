@@ -1,0 +1,30 @@
+# ----------- Stage 1: Build React frontend -----------
+FROM node:20-alpine AS frontend-build
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# ----------- Stage 2: Build Flask + Prolog backend -----------
+FROM python:3.12-slim
+WORKDIR /app
+
+# Install SWI-Prolog
+RUN apt-get update && \
+    apt-get install -y swi-prolog && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy backend code
+COPY backend/ ./backend
+COPY --from=frontend-build /app/frontend/build ./frontend/build
+
+# Install Python dependencies
+WORKDIR /app/backend
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Expose port
+EXPOSE 5000
+
+# Run server
+CMD sh -c 'gunicorn --bind 0.0.0.0:${PORT:-5000} app:app'
