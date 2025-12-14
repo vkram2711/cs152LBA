@@ -17,6 +17,7 @@ def clear_preferences():
 
 def add_preference(key, value):
     # Strings need quotes in Prolog
+    prolog.query(f"retractall(user_pref({key}, _))")
     if isinstance(value, str):
         value = value.lower()
         prolog.assertz(f"user_pref({key}, {value})")
