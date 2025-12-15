@@ -51,9 +51,7 @@ def assert_pref(key: str, value):
 def recommend():
     data = request.json
 
-    # It is cleaner to retract all known facts at the start of a request
-    # or rely on the setters to clean up as they go.
-    # clear_context() <--- Ensure this clears all dynamic predicates defined above
+    clear_context()
 
     # ---- 1. Handle Single-Value Attributes ----
     # Map JSON keys to Prolog predicates
@@ -70,7 +68,6 @@ def recommend():
             assert_attribute(prolog_pred, data[json_key])
 
     # ---- 2. Handle Dictionary Preferences ----
-    # This corresponds to your user_pref(Key, Value) logic
     prefs = data.get("preferences", {})
     for key, value in prefs.items():
         assert_pref(key, value)

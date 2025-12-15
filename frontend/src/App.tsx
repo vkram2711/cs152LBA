@@ -4,6 +4,7 @@ import DurationPicker from "./components/DurationPicker";
 import TimeRangeSlider from "./components/TimeRangeSlider";
 import { AnimatePresence } from "framer-motion";
 import AnimatedField from "./components/AnimatedField";
+import GroupSizePicker from "./components/GroupSizePicker";
 
 
 /* ================= TYPES ================= */
@@ -37,6 +38,7 @@ const yesNoOptions: YesNo[] = ["yes", "no"];
 const outdoorOptions: Outdoor[] = ["dont_care", "yes", "no"];
 const mealOptions = ["coffee", "bakery", "breakfast", "brunch", "lunch"];
 
+
 /* ================= APP ================= */
 
 const App: React.FC = () => {
@@ -45,6 +47,8 @@ const App: React.FC = () => {
   const [weather, setWeather] = useState<Weather>("dont_care");
   const [duration, setDuration] = useState<Duration>("dont_care");
   const [groupSize, setGroupSize] = useState(1);
+  const showGroupSize =
+      intent === "meet_friends" || mood === "social" || duration === "long";
 
   const [form, setForm] = useState({
     budget: "medium" as Budget,
@@ -59,6 +63,12 @@ const App: React.FC = () => {
 
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (!showGroupSize) {
+      setGroupSize(1);
+    }
+  }, [showGroupSize]);
 
   /* ======== BRANCHING LOGIC ======== */
 
@@ -174,6 +184,15 @@ const App: React.FC = () => {
                   </AnimatedField>
               )}
             </AnimatePresence>
+
+            <AnimatePresence>
+              {showGroupSize && (
+                  <AnimatedField>
+                    <GroupSizePicker value={groupSize} onChange={setGroupSize} />
+                  </AnimatedField>
+              )}
+            </AnimatePresence>
+
 
 
             <AnimatePresence>
