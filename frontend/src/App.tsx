@@ -1,156 +1,175 @@
 import React, { useState, FormEvent } from "react";
-import TimeRangeSlider from "./components/TimeRangeSlider";
 import PrettySelect from "./components/PrettySelect";
+import DurationPicker from "./components/DurationPicker";
+import TimeRangeSlider from "./components/TimeRangeSlider";
 
-/* ======================
-   Types
-====================== */
+/* ================= TYPES ================= */
+
+type Intent = "work" | "relax" | "meet_friends" | "quick_coffee";
+type Mood = "neutral" | "tired" | "focused" | "social";
+type Weather = "dont_care" | "sunny" | "rainy";
+type Duration = "short" | "long" | "dont_care";
 
 type Budget = "low" | "medium" | "high";
 type WalkTime = "short" | "medium" | "long";
-type NoiseLevel = "quiet" | "moderate" | "lively";
+type Noise = "quiet" | "moderate" | "lively";
 type YesNo = "yes" | "no";
-type DontCareYesNo = "yes" | "no" | "dont_care";
+type Outdoor = "yes" | "no" | "dont_care";
 
-interface Preferences {
-  computer_friendly: YesNo;
-  budget: Budget;
-  max_walk_time: WalkTime;
-  start_hour: number;
-  end_hour: number;
-  meal_type: string;
-  noise_level: NoiseLevel;
-  outdoor_seating: DontCareYesNo;
-}
+/* ================= OPTIONS ================= */
 
-interface RecommendationResponse {
-  recommendations: string[];
-}
-
-interface SelectField {
-  label: string;
-  name: keyof Preferences;
-  options: string[];
-}
-
-/* ======================
-   Fields Metadata
-====================== */
-
-const selectFields: SelectField[] = [
-  { label: "Computer Friendly", name: "computer_friendly", options: ["yes", "no"] },
-  { label: "Budget", name: "budget", options: ["low", "medium", "high"] },
-  { label: "Max Walk Time", name: "max_walk_time", options: ["short", "medium", "long"] },
-  { label: "Meal Type", name: "meal_type", options: ["coffee", "bakery", "breakfast", "brunch", "lunch"] },
-  { label: "Noise Level", name: "noise_level", options: ["quiet", "moderate", "lively"] },
-  { label: "Outdoor Seating", name: "outdoor_seating", options: ["dont_care", "yes", "no"] }
+const intentOptions: Intent[] = [
+  "work",
+  "relax",
+  "meet_friends",
+  "quick_coffee"
 ];
 
-/* ======================
-   App Component
-====================== */
+const moodOptions: Mood[] = ["neutral", "tired", "focused", "social"];
+const weatherOptions: Weather[] = ["dont_care", "sunny", "rainy"];
+const budgetOptions: Budget[] = ["low", "medium", "high"];
+const walkOptions: WalkTime[] = ["short", "medium", "long"];
+const noiseOptions: Noise[] = ["quiet", "moderate", "lively"];
+const yesNoOptions: YesNo[] = ["yes", "no"];
+const outdoorOptions: Outdoor[] = ["dont_care", "yes", "no"];
+const mealOptions = ["coffee", "bakery", "breakfast", "brunch", "lunch"];
+
+/* ================= APP ================= */
 
 const App: React.FC = () => {
-  const [form, setForm] = useState<Preferences>({
-    computer_friendly: "yes",
-    budget: "medium",
-    max_walk_time: "short",
-    start_hour: 9,
-    end_hour: 18,
+  const [intent, setIntent] = useState<Intent>("work");
+  const [mood, setMood] = useState<Mood>("neutral");
+  const [weather, setWeather] = useState<Weather>("dont_care");
+  const [duration, setDuration] = useState<Duration>("dont_care");
+  const [groupSize, setGroupSize] = useState(1);
+
+  const [form, setForm] = useState({
+    budget: "medium" as Budget,
     meal_type: "coffee",
-    noise_level: "quiet",
-    outdoor_seating: "dont_care"
+    computer_friendly: "yes" as YesNo,
+    max_walk_time: "short" as WalkTime,
+    noise_level: "quiet" as Noise,
+    outdoor_seating: "dont_care" as Outdoor,
+    start_hour: 9,
+    end_hour: 18
   });
 
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const submitForm = async (e: FormEvent) => {
+  /* ======== BRANCHING LOGIC ======== */
+
+  const showComputer =
+      intent === "work" || duration === "long" || mood === "focused";
+
+  const showNoise =
+      intent !== "quick_coffee" || mood === "tired" || mood === "social";
+
+  const showOutdoor =
+      intent === "relax" || weather === "sunny" || mood === "social";
+
+  const showWalk =
+      intent === "quick_coffee" || mood === "tired";
+
+  /* ======== SUBMIT ======== */
+
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    try {
-      const res = await fetch("/recommend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
-      });
-      const data: RecommendationResponse = await res.json();
-      setRecommendations([...new Set(data.recommendations)]); // deduplicate
-    } finally {
-      setLoading(false);
-    }
+    const preferences: Record<string, any> = {
+      budget: form.budget,
+      meal_type: form.meal_type,
+      start_hour: form.start_hour,
+      end_hour: form.end_hour
+    };
+
+    if (showComputer) preferences.computer_friendly = form.computer_friendly;
+    if (showNoise) preferences.noise_level = form.noise_level;
+    if (showOutdoor) preferences.outdoor_seating = form.outdoor_seating;
+    if (showWalk) preferences.max_walk_time = form.max_walk_time;
+
+    const payload = {
+      intent,
+      mood: mood !== "neutral" ? mood : undefined,
+      weather: weather !== "dont_care" ? weather : undefined,
+      duration: duration !== "dont_care" ? duration : undefined,
+      group_size: groupSize,
+      preferences
+    };
+
+    const res = await fetch("http://localhost:5000/recommend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    setRecommendations(Array.from(new Set(data.recommendations || [])));
+    setLoading(false);
   };
 
+  /* ======== UI ======== */
+
   return (
-      <div className="min-h-screen flex items-center justify-center bg-crema p-6">
-        <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8">
+      <div className="min-h-screen bg-crema p-6">
+        <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-6">
+          {/* FORM */}
+          <form onSubmit={submit} className="bg-white rounded-3xl p-6 shadow-xl space-y-4">
+            <h1 className="text-2xl font-bold">☕ Smart Café Finder</h1>
 
-          {/* LEFT: Form */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
-            <h1 className="text-3xl font-bold mb-2">☕ Café Finder</h1>
-            <p className="text-gray-500 mb-6">
-              Find your perfect Buenos Aires café
-            </p>
+            <PrettySelect label="Intent" value={intent} options={intentOptions} onChange={(v) => setIntent(v as Intent)} />
+            <PrettySelect label="Mood" value={mood} options={moodOptions} onChange={(v) => setMood(v as Mood)} />
+            <PrettySelect label="Weather" value={weather} options={weatherOptions} onChange={(v) => setWeather(v as Weather)} />
 
-            <form onSubmit={submitForm} className="space-y-4">
-              {selectFields.map((field) => (
-                  <PrettySelect
-                      key={field.name}
-                      label={field.label}
-                      value={String(form[field.name])}
-                      options={field.options}
-                      onChange={(val) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            [field.name]: val
-                          }))
-                      }
-                  />
-              ))}
+            <DurationPicker value={duration} onChange={setDuration} />
 
-              <TimeRangeSlider
-                  start={form.start_hour}
-                  end={form.end_hour}
-                  onChange={(start, end) =>
-                      setForm((prev) => ({ ...prev, start_hour: start, end_hour: end }))
-                  }
-              />
+            <PrettySelect label="Budget" value={form.budget} options={budgetOptions} onChange={(v) => setForm(p => ({ ...p, budget: v as Budget }))} />
+            <PrettySelect label="Meal" value={form.meal_type} options={mealOptions} onChange={(v) => setForm(p => ({ ...p, meal_type: v }))} />
 
-              <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full mt-4 bg-accent hover:bg-mocha text-white font-semibold py-3 rounded-2xl transition"
-              >
-                {loading ? "Brewing..." : "Find Cafés"}
-              </button>
-            </form>
-          </div>
+            {showComputer && (
+                <PrettySelect label="Computer friendly?" value={form.computer_friendly} options={yesNoOptions} onChange={(v) => setForm(p => ({ ...p, computer_friendly: v as YesNo }))} />
+            )}
 
-          {/* RIGHT: Recommendations */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
-            <h2 className="text-2xl font-bold mb-4">Recommendations</h2>
+            {showWalk && (
+                <PrettySelect label="Max walk time" value={form.max_walk_time} options={walkOptions} onChange={(v) => setForm(p => ({ ...p, max_walk_time: v as WalkTime }))} />
+            )}
+
+            {showNoise && (
+                <PrettySelect label="Noise level" value={form.noise_level} options={noiseOptions} onChange={(v) => setForm(p => ({ ...p, noise_level: v as Noise }))} />
+            )}
+
+            {showOutdoor && (
+                <PrettySelect label="Outdoor seating" value={form.outdoor_seating} options={outdoorOptions} onChange={(v) => setForm(p => ({ ...p, outdoor_seating: v as Outdoor }))} />
+            )}
+
+            <TimeRangeSlider
+                start={form.start_hour}
+                end={form.end_hour}
+                onChange={(s, e) => setForm(p => ({ ...p, start_hour: s, end_hour: e }))}
+            />
+
+            <button className="w-full bg-accent text-white py-3 rounded-2xl font-semibold">
+              {loading ? "Finding cafés..." : "Find cafés"}
+            </button>
+          </form>
+
+          {/* RESULTS */}
+          <div className="bg-white rounded-3xl p-6 shadow-xl">
+            <h2 className="text-xl font-bold mb-4">Recommendations</h2>
             {recommendations.length === 0 ? (
-                <p className="text-gray-500">
-                  No cafés yet. Adjust preferences and search again.
-                </p>
+                <p className="text-gray-500">No results yet.</p>
             ) : (
-                <ul className="space-y-4">
-                  {recommendations.map((cafe) => (
-                      <li
-                          key={cafe}
-                          className="p-5 rounded-2xl bg-gradient-to-r from-latte to-crema shadow-md flex items-center justify-between"
-                      >
-                  <span className="text-lg font-semibold capitalize">
-                    {cafe.replace("_", " ")}
-                  </span>
-                        <span className="text-sm text-gray-500">Recommended</span>
+                <ul className="space-y-3">
+                  {recommendations.map((cafe, i) => (
+                      <li key={cafe} className="p-4 bg-latte rounded-2xl">
+                        <div className="font-semibold capitalize">{cafe.replace("_", " ")}</div>
+                        <div className="text-xs text-gray-600">Rank #{i + 1}</div>
                       </li>
                   ))}
                 </ul>
             )}
           </div>
-
         </div>
       </div>
   );

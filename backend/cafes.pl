@@ -183,15 +183,81 @@ noise_level(llama, quiet).
 outdoor_seating(llama, yes).
 
 
-% ============================
-% USER PREFERENCES
-% ============================
 
+% ============================================
+% USER CONTEXT (DYNAMIC)
+% ============================================
+
+:- dynamic user_intent/1.
+:- dynamic user_mood/1.
+:- dynamic group_size/1.
+:- dynamic weather/1.
+:- dynamic stay_duration/1.
 :- dynamic user_pref/2.
 
-% ============================
+clear_context :-
+    retractall(user_intent(_)),
+    retractall(user_mood(_)),
+    retractall(group_size(_)),
+    retractall(weather(_)),
+    retractall(stay_duration(_)),
+    retractall(user_pref(_, _)).
+
+% ============================================
+% INTENT, MOOD, CONTEXT IMPLICATIONS
+% ============================================
+
+% ---- INTENT ----
+implied_pref(work, computer_friendly, yes).
+implied_pref(work, noise_level, quiet).
+
+implied_pref(relax, noise_level, moderate).
+implied_pref(relax, outdoor_seating, yes).
+
+implied_pref(meet_friends, noise_level, lively).
+
+% ---- MOOD ----
+implied_pref(tired, noise_level, quiet).
+implied_pref(tired, walk_time, short).
+
+implied_pref(social, noise_level, lively).
+
+% ---- WEATHER ----
+implied_pref(rainy, outdoor_seating, no).
+implied_pref(sunny, outdoor_seating, yes).
+
+% ---- DURATION ----
+implied_pref(short, walk_time, short).
+implied_pref(long, computer_friendly, yes).
+
+% ============================================
+% EFFECTIVE PREFERENCE RESOLUTION
+% Priority:
+% explicit > mood > intent > weather > duration
+% ============================================
+
+effective_pref(Key, Value) :-
+    user_pref(Key, Value), !.
+
+effective_pref(Key, Value) :-
+    user_mood(M),
+    implied_pref(M, Key, Value), !.
+
+effective_pref(Key, Value) :-
+    user_intent(I),
+    implied_pref(I, Key, Value), !.
+
+effective_pref(Key, Value) :-
+    weather(W),
+    implied_pref(W, Key, Value), !.
+
+effective_pref(Key, Value) :-
+    stay_duration(D),
+    implied_pref(D, Key, Value).
+
+% ============================================
 % COMPATIBILITY RULES
-% ============================
+% ============================================
 
 budget_compatible(User, Cafe) :-
     (User = high);
@@ -208,64 +274,77 @@ noise_compatible(moderate, quiet).
 noise_compatible(moderate, moderate).
 noise_compatible(lively, _).
 
-% ============================
-% MATCH RULES
-% ============================
+% ============================================
+% HARD FILTERS (REJECTION RULES)
+% ============================================
 
-matches_computer_friendly(P) :-
-    user_pref(computer_friendly, yes) ->
-        computer_friendly(P, yes)
-    ;
-        true.
+reject(P) :-
+    effective_pref(noise_level, quiet),
+    noise_level(P, lively).
 
-matches_budget(P) :-
-    user_pref(budget, U),
-    budget(P, C),
-    budget_compatible(U, C).
+reject(P) :-
+    effective_pref(outdoor_seating, no),
+    outdoor_seating(P, yes).
 
-matches_distance(P) :-
-    user_pref(max_walk_time, U),
-    walk_time(P, C),
-    distance_compatible(U, C).
+reject(P) :-
+    group_size(N),
+    N > 3,
+    noise_level(P, quiet).
 
-matches_hours(P) :-
-    user_pref(start_hour, S),
-    user_pref(end_hour, E),
-    open_hours(P, O, C),
-    S >= O,
-    E =< C.
+% ============================================
+% SCORING RULES (SOFT PREFERENCES)
+% ============================================
 
-matches_meal(P) :-
-    user_pref(meal_type, M),
-    serves_meal(P, M).
+score(P, 2) :-
+    user_intent(work),
+    computer_friendly(P, yes).
 
-matches_noise(P) :-
-    user_pref(noise_level, U),
-    noise_level(P, C),
-    noise_compatible(U, C).
+score(P, 2) :-
+    user_mood(tired),
+    noise_level(P, quiet).
 
-matches_outdoor(P) :-
-    user_pref(outdoor_seating, dont_care) ->
-        true
-    ;
-        (user_pref(outdoor_seating, V),
-         outdoor_seating(P, V)).
+score(P, 1) :-
+    user_intent(relax),
+    outdoor_seating(P, yes).
 
-% ============================
+score(P, 1) :-
+    stay_duration(long),
+    computer_friendly(P, yes).
+
+score(P, 1) :-
+    weather(sunny),
+    outdoor_seating(P, yes).
+
+score(P, 1) :-
+    group_size(N),
+    N >= 2,
+    noise_level(P, moderate).
+
+% ============================================
+% TOTAL SCORE AGGREGATION
+% ============================================
+
+total_score(P, Score) :-
+    findall(S, score(P, S), Scores),
+    sumlist(Scores, Score).
+
+% ============================================
 % FINAL RECOMMENDATION
-% ============================
+% ============================================
 
-recommend(P) :-
+recommend(P, Score) :-
     place(P),
-    matches_computer_friendly(P),
-    matches_budget(P),
-    matches_distance(P),
-    matches_hours(P),
-    matches_meal(P),
-    matches_noise(P),
-    matches_outdoor(P).
+    \+ reject(P),
+    total_score(P, Score).
 
-:- dynamic pref/2.
+% ============================================
+% SORTED RECOMMENDATIONS (DESCENDING)
+% ============================================
+
+recommended_sorted(List) :-
+    findall(Score-P, recommend(P, Score), Pairs),
+    sort(0, @>=, Pairs, Sorted),
+    pairs_values(Sorted, List).
 
 clear_prefs :-
     retractall(pref(_, _)).

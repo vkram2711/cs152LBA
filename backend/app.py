@@ -15,45 +15,57 @@ def clear_preferences():
     list(prolog.query("clear_prefs."))
 
 
-def add_preference(key, value):
-    # Strings need quotes in Prolog
-    prolog.query(f"retractall(user_pref({key}, _))")
-    if isinstance(value, str):
-        value = value.lower()
-        prolog.assertz(f"user_pref({key}, {value})")
-    else:
-        prolog.assertz(f"user_pref({key}, {value})")
+def assert_fact(fact: str):
+    list(prolog.query(f"assertz({fact})"))
+
+
+def clear_context():
+    list(prolog.query("clear_context"))
 
 
 @app.route("/recommend", methods=["POST"])
 def recommend():
-    """
-    Expected JSON:
-    {
-      "computer_friendly": "yes",
-      "budget": "medium",
-      "max_walk_time": "short",
-      "start_hour": 9.0,
-      "end_hour": 18.0,
-      "meal_type": "coffee",
-      "noise_level": "quiet",
-      "outdoor_seating": "dont_care"
-    }
-    """
-
     data = request.json
+    clear_context()
 
-    clear_preferences()
+    # ---- Intent ----
+    if "intent" in data:
+        assert_fact(f"user_intent({data['intent']})")
 
-    for key, value in data.items():
-        add_preference(key, value)
+    # ---- Mood ----
+    if "mood" in data:
+        assert_fact(f"user_mood({data['mood']})")
 
-    results = []
-    for solution in prolog.query("recommend(P)."):
-        results.append(solution["P"])
+    # ---- Group size ----
+    if "group_size" in data:
+        assert_fact(f"group_size({data['group_size']})")
+
+    # ---- Weather ----
+    if "weather" in data:
+        assert_fact(f"weather({data['weather']})")
+
+    # ---- Duration ----
+    if "duration" in data:
+        assert_fact(f"stay_duration({data['duration']})")
+
+    # ---- Explicit preferences ----
+    prefs = data.get("preferences", {})
+    for key, value in prefs.items():
+        assert_fact(f"user_pref({key}, {value})")
+
+    # ---- Query recommendations ----
+    results = list(prolog.query("recommended_sorted(R)"))
+
+    if not results:
+        return jsonify({"recommendations": []})
+
+    cafes = results[0]["R"]
+
+    # Convert Prolog atoms to strings
+    cafes = [str(cafe) for cafe in cafes]
 
     return jsonify({
-        "recommendations": results
+        "recommendations": cafes
     })
 
 
