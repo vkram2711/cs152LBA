@@ -79,7 +79,7 @@ const App: React.FC = () => {
       intent !== "quick_coffee" || mood === "tired" || mood === "social";
 
   const showOutdoor =
-      intent === "relax" || weather === "sunny" || mood === "social";
+      intent === "relax" || weather === "sunny" || weather === "dont_care"||mood === "social";
 
   const showWalk =
       intent === "quick_coffee" || mood === "tired";
