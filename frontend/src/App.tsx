@@ -2,6 +2,9 @@ import React, { useState, FormEvent } from "react";
 import PrettySelect from "./components/PrettySelect";
 import DurationPicker from "./components/DurationPicker";
 import TimeRangeSlider from "./components/TimeRangeSlider";
+import { AnimatePresence } from "framer-motion";
+import AnimatedField from "./components/AnimatedField";
+
 
 /* ================= TYPES ================= */
 
@@ -127,21 +130,67 @@ const App: React.FC = () => {
             <PrettySelect label="Budget" value={form.budget} options={budgetOptions} onChange={(v) => setForm(p => ({ ...p, budget: v as Budget }))} />
             <PrettySelect label="Meal" value={form.meal_type} options={mealOptions} onChange={(v) => setForm(p => ({ ...p, meal_type: v }))} />
 
-            {showComputer && (
-                <PrettySelect label="Computer friendly?" value={form.computer_friendly} options={yesNoOptions} onChange={(v) => setForm(p => ({ ...p, computer_friendly: v as YesNo }))} />
-            )}
+            <AnimatePresence>
+              {showComputer && (
+                  <AnimatedField>
+                    <PrettySelect
+                        label="Computer friendly?"
+                        value={form.computer_friendly}
+                        options={yesNoOptions}
+                        onChange={(v) =>
+                            setForm((p) => ({ ...p, computer_friendly: v as YesNo }))
+                        }
+                    />
+                  </AnimatedField>
+              )}
+            </AnimatePresence>
 
-            {showWalk && (
-                <PrettySelect label="Max walk time" value={form.max_walk_time} options={walkOptions} onChange={(v) => setForm(p => ({ ...p, max_walk_time: v as WalkTime }))} />
-            )}
+            <AnimatePresence>
+              {showWalk && (
+                  <AnimatedField>
+                    <PrettySelect
+                        label="Max walk time"
+                        value={form.max_walk_time}
+                        options={walkOptions}
+                        onChange={(v) =>
+                            setForm((p) => ({ ...p, max_walk_time: v as WalkTime }))
+                        }
+                    />
+                  </AnimatedField>
+              )}
+            </AnimatePresence>
 
-            {showNoise && (
-                <PrettySelect label="Noise level" value={form.noise_level} options={noiseOptions} onChange={(v) => setForm(p => ({ ...p, noise_level: v as Noise }))} />
-            )}
+            <AnimatePresence>
+              {showNoise && (
+                  <AnimatedField>
+                    <PrettySelect
+                        label="Noise level"
+                        value={form.noise_level}
+                        options={noiseOptions}
+                        onChange={(v) =>
+                            setForm((p) => ({ ...p, noise_level: v as Noise }))
+                        }
+                    />
+                  </AnimatedField>
+              )}
+            </AnimatePresence>
 
-            {showOutdoor && (
-                <PrettySelect label="Outdoor seating" value={form.outdoor_seating} options={outdoorOptions} onChange={(v) => setForm(p => ({ ...p, outdoor_seating: v as Outdoor }))} />
-            )}
+
+            <AnimatePresence>
+              {showOutdoor && (
+                  <AnimatedField>
+                    <PrettySelect
+                        label="Outdoor seating"
+                        value={form.outdoor_seating}
+                        options={outdoorOptions}
+                        onChange={(v) =>
+                            setForm((p) => ({ ...p, outdoor_seating: v as Outdoor }))
+                        }
+                    />
+                  </AnimatedField>
+              )}
+            </AnimatePresence>
+
 
             <TimeRangeSlider
                 start={form.start_hour}
