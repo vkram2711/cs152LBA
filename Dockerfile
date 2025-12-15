@@ -1,5 +1,5 @@
 # ----------- Stage 1: Build React frontend -----------
-FROM node:20-alpine AS frontend-build
+FROM --platform=linux/amd64  node:20-alpine AS frontend-build
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm install
@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ----------- Stage 2: Build Flask + Prolog backend -----------
-FROM python:3.12-slim
+FROM --platform=linux/amd64 python:3.12-slim
 WORKDIR /app
 
 # Install SWI-Prolog
