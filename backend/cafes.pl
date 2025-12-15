@@ -1,3 +1,12 @@
+:- discontiguous place/1.
+:- discontiguous computer_friendly/2.
+:- discontiguous budget/2.
+:- discontiguous walk_time/2.
+:- discontiguous open_hours/3.
+:- discontiguous serves_meal/2.
+:- discontiguous noise_level/2.
+:- discontiguous outdoor_seating/2.
+
 % ============================================
 % Knowledge base: study-friendly cafes in BA
 % ============================================
@@ -60,8 +69,8 @@ serves_meal(moshu, brunch).
 serves_meal(moshu, lunch).
 serves_meal(moshu, coffee).
 serves_meal(moshu, bakery).
-noise_level(moshu_palermo, moderate).
-outdoor_seating(moshu_palermo, yes).
+noise_level(moshu, moderate).
+outdoor_seating(moshu, yes).
 
 % name: Nano
 place(nano).
@@ -170,6 +179,7 @@ serves_meal(babalu, coffee).
 serves_meal(babalu, bakery).
 noise_level(babalu, quiet).
 outdoor_seating(babalu, yes).
+
 % name: Llama
 place(llama).
 computer_friendly(llama, yes).
@@ -182,12 +192,9 @@ serves_meal(llama, bakery).
 noise_level(llama, quiet).
 outdoor_seating(llama, yes).
 
-
-
 % ============================================
 % USER CONTEXT (DYNAMIC)
 % ============================================
-
 :- dynamic user_intent/1.
 :- dynamic user_mood/1.
 :- dynamic group_size/1.
@@ -195,6 +202,7 @@ outdoor_seating(llama, yes).
 :- dynamic stay_duration/1.
 :- dynamic user_pref/2.
 
+% clear_context: clear all dynamic user context and explicit prefs
 clear_context :-
     retractall(user_intent(_)),
     retractall(user_mood(_)),
@@ -228,7 +236,8 @@ implied_pref(sunny, outdoor_seating, yes).
 
 % ---- DURATION ----
 implied_pref(short, walk_time, short).
-implied_pref(long, computer_friendly, yes).
+% long tends to favor computer-friendly if intent is work; keep conditional
+implied_pref(long, computer_friendly, yes) :- user_intent(work).
 
 % ============================================
 % EFFECTIVE PREFERENCE RESOLUTION
@@ -259,10 +268,10 @@ effective_pref(Key, Value) :-
 % COMPATIBILITY RULES
 % ============================================
 
-budget_compatible(User, Cafe) :-
+budget_compatible(User, CafeCategory) :-
     (User = high);
-    (User = medium, Cafe \= high);
-    (User = low, Cafe = low).
+    (User = medium, CafeCategory \= high);
+    (User = low, CafeCategory = low).
 
 distance_compatible(short, short).
 distance_compatible(medium, short).
@@ -275,58 +284,115 @@ noise_compatible(moderate, moderate).
 noise_compatible(lively, _).
 
 % ============================================
-% HARD FILTERS (REJECTION RULES)
+% NEEDS QUESTION (UI HINTS)
+% The UI can ask needs_question(Key) to decide whether to show a field
 % ============================================
 
+needs_question(computer_friendly) :-
+    user_intent(work);
+    stay_duration(long).
+needs_question(outdoor_seating) :-
+    user_intent(relax);
+    weather(sunny).
+needs_question(noise_level) :-
+    user_intent(work);
+    user_intent(meet_friends);
+    user_mood(tired);
+    user_mood(social).
+needs_question(max_walk_time) :-
+    user_intent(quick_coffee);
+    user_mood(tired).
+
+% ============================================
+% HARD FILTERS (REJECTION RULES)
+% Use effective_pref where available for consistent behavior
+% ============================================
+
+% If user effectively wants quiet places, reject lively ones.
 reject(P) :-
     effective_pref(noise_level, quiet),
     noise_level(P, lively).
 
+% If user effectively wants outdoor seating, reject places without it.
 reject(P) :-
-    effective_pref(outdoor_seating, no),
-    outdoor_seating(P, yes).
+    effective_pref(outdoor_seating, yes),
+    outdoor_seating(P, no).
 
+% If user effectively wants computer friendly, reject non-friendly places.
 reject(P) :-
-    group_size(N),
-    N > 3,
-    noise_level(P, quiet).
+    effective_pref(computer_friendly, yes),
+    computer_friendly(P, no).
+
+% Budget compatibility (explicit/effective pref)
+reject(P) :-
+    effective_pref(budget, U),
+    budget(P, C),
+    \+ budget_compatible(U, C).
+
+% Hours: if both start and end are effective, require overlap
+reject(P) :-
+    effective_pref(start_hour, S),
+    effective_pref(end_hour, E),
+    open_hours(P, O, C),
+    (S < O ; E > C).
 
 % ============================================
-% SCORING RULES (SOFT PREFERENCES)
+% SCORING RULES (SOFT PREFERENCES) as score_component/3
+% produce (Label, Value) so we can explain results
 % ============================================
 
-score(P, 2) :-
-    user_intent(work),
-    computer_friendly(P, yes).
+% score_component(Place, Label, Value).
 
-score(P, 2) :-
+score_component(P, walk_distance, 1) :-
+    effective_pref(walk_time, U),
+    walk_time(P, C),
+    distance_compatible(U, C).
+
+score_component(P, quiet_for_tired, 2) :-
     user_mood(tired),
     noise_level(P, quiet).
 
-score(P, 1) :-
+score_component(P, outdoor_relax, 1) :-
     user_intent(relax),
     outdoor_seating(P, yes).
 
-score(P, 1) :-
+score_component(P, long_stay_friendly, 1) :-
     stay_duration(long),
     computer_friendly(P, yes).
 
-score(P, 1) :-
+score_component(P, sunny_outdoor, 1) :-
     weather(sunny),
     outdoor_seating(P, yes).
 
-score(P, 1) :-
+score_component(P, group_ok_moderate, 1) :-
     group_size(N),
     N >= 2,
     noise_level(P, moderate).
 
+score_component(P, group_too_large_penalty, -1) :-
+    group_size(N),
+    N > 3,
+    noise_level(P, quiet).
+
+score_component(P, serves_requested_meal, 1) :-
+    effective_pref(meal_type, M),
+    serves_meal(P, M).
+
+score_component(P, work_computer_bonus, 2) :-
+    user_intent(work),
+    computer_friendly(P, yes).
+
 % ============================================
-% TOTAL SCORE AGGREGATION
+% TOTAL SCORE AGGREGATION (collect components, sum values)
 % ============================================
 
 total_score(P, Score) :-
-    findall(S, score(P, S), Scores),
-    sumlist(Scores, Score).
+    findall(Value, score_component(P, _, Value), Values),
+    sumlist(Values, Score).
+
+% Also allow retrieving component list for explanations
+explain(P, Components) :-
+    findall(Label-Value, score_component(P, Label, Value), Components).
 
 % ============================================
 % FINAL RECOMMENDATION
@@ -338,13 +404,38 @@ recommend(P, Score) :-
     total_score(P, Score).
 
 % ============================================
-% SORTED RECOMMENDATIONS (DESCENDING)
+% SORTED RECOMMENDATIONS (DESCENDING by score)
+% Returns list of Place-Score pairs to preserve scores in UI
 % ============================================
 
-recommended_sorted(List) :-
-    findall(Score-P, recommend(P, Score), Pairs),
-    sort(0, @>=, Pairs, Sorted),
-    pairs_values(Sorted, List).
+recommended_sorted_pairs(Pairs) :-
+    findall(Score-Place, recommend(Place, Score), Pairs0),
+    sort(0, @>=, Pairs0, Pairs).
+
+% Convenience: return only places (legacy)
+recommended_sorted(Places) :-
+    recommended_sorted_pairs(Pairs),
+    pairs_values(Pairs, Places).
+
+% ============================================
+% small utilities
+% ============================================
 
 clear_prefs :-
-    retractall(pref(_, _)).
+    retractall(user_pref(_, _)).
+
+% --- Helper 1: Set a generic preference (Key-Value pair) ---
+% Usage: set_pref(wifi, true).
+set_pref(Key, Value) :-
+    retractall(user_pref(Key, _)),
+    assert(user_pref(Key, Value)).
+
+
+% --- Helper 2: Set a single-value attribute ---
+% Usage: set_attribute(user_intent, work).
+% This constructs the term dynamically to clear the old one.
+set_attribute(PredName, Value) :-
+    OldFact =.. [PredName, _],   % Construct term like user_intent(_)
+    retractall(OldFact),         % Remove old instance
+    NewFact =.. [PredName, Value], % Construct term like user_intent(work)
+    assert(NewFact).
